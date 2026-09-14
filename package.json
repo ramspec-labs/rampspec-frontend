@@ -12,7 +12,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "check:env": "node scripts/check-public-env.mjs",
+    "check:secrets": "node scripts/check-secrets.mjs",
+    "verify": "pnpm check:env && pnpm check:secrets && pnpm typecheck && pnpm lint && pnpm test",
+    "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
   },
   "dependencies": {
