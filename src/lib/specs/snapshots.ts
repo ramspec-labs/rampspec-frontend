@@ -1,0 +1,3 @@
+export type SnapshotRequirement = { id: string; title: string; state: "added" | "changed" | "deprecated" | "removed" | "unchanged"; maturity: "draft" | "fcp" | "stable"; coverage: "covered" | "partial" | "missing" };
+export const snapshot = { semanticVersion: "2026.09", upstreamCommit: "8d9f2a1", contentHash: "sha256:9b4...", rulePack: "ramp-3" };
+export const requirements: SnapshotRequirement[] = [{ id: "SEP-01", title: "Ownership challenge", state: "changed", maturity: "fcp", coverage: "covered" }, { id: "SEP-02", title: "Signed report", state: "added", maturity: "stable", coverage: "covered" }, { id: "SEP-03", title: "Recovery notice", state: "deprecated", maturity: "draft", coverage: "partial" }];
