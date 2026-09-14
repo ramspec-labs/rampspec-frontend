@@ -1,6 +1,7 @@
 import { ArrowUpRight, CheckCircle2, CircleDashed, ShieldCheck, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReleaseSummary } from "@/components/release-summary";
+import { OperationalSignals } from "@/components/operational-signals";
 
 const navigation = ["Overview", "Projects", "Runs", "Reports"];
 const readinessCards: Array<{ label: string; value: string; tone: "success" | "accent" | "warning"; Icon: LucideIcon }> = [
@@ -49,6 +50,7 @@ export default function HomePage() {
           ))}
         </section>
         <div className="mt-8"><ReleaseSummary /></div>
+        <div className="mt-8"><OperationalSignals /></div>
         <section className="mt-8 rounded-lg border border-line bg-surface shadow-panel">
           <div className="flex items-center justify-between border-b border-line px-5 py-4">
             <div><h2 className="font-semibold">Recent verification activity</h2><p className="mt-1 text-sm text-muted">Backend-authoritative run status</p></div>
