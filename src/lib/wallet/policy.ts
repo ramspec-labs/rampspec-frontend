@@ -1,0 +1,2 @@
+export type WalletValidation = { valid: boolean; errors: string[] };
+export function validatePublicationRequest(network: string, expectedNetwork: string, contractId: string, payload: string): WalletValidation { const errors: string[] = []; if (network !== expectedNetwork) errors.push("Wallet network does not match the selected deployment."); if (!/^C[A-Z0-9]{55}$/.test(contractId)) errors.push("Contract identifier is invalid."); if (!payload.trim()) errors.push("Signing payload is empty."); return { valid: errors.length === 0, errors }; }

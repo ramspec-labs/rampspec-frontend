@@ -1,0 +1,6 @@
+"use client";
+import { useState } from "react";
+import { AppShell } from "@/components/app-shell";
+import { Button } from "@/components/ui/button";
+import { validatePublicationRequest } from "@/lib/wallet/policy";
+export default function WalletPage() { const [state, setState] = useState("disconnected"); const check = validatePublicationRequest("testnet", "testnet", "C" + "A".repeat(55), "report:REP-2041"); return <AppShell title="Wallet ownership" description="Connect a browser wallet only for an explicitly approved publication action."><section className="max-w-xl rounded-lg border border-line bg-surface p-6 shadow-panel"><p className="text-sm text-muted">Runner identities and secret keys never enter the browser.</p><div className="mt-5 rounded-md bg-canvas p-4 text-sm"><p>Network: <strong>Testnet</strong></p><p className="mt-1">Operation: <strong>Publish report commitment</strong></p></div><Button className="mt-5" onClick={() => setState("connected")}>{state === "connected" ? "Wallet connected" : "Connect wallet"}</Button>{state === "connected" && <p className="mt-4 text-sm text-emerald-700">Address ownership verified. Review the payload before signing.</p>}{!check.valid && <ul className="mt-4 text-sm text-red-700">{check.errors.map((error) => <li key={error}>{error}</li>)}</ul>}</section></AppShell>; }
