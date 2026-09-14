@@ -1,0 +1,3 @@
+import { AppShell } from "@/components/app-shell";
+import { StatusBadge } from "@/components/ui/status-badge";
+export default function StatusPage() { return <AppShell title="Service status" description="Current frontend transport and dependency health."><div className="space-y-3">{[["API transport", "Operational", "success"], ["Event stream", "Recovering", "warning"], ["Evidence RPC", "Unavailable", "danger"]].map(([name, state, tone]) => <div key={name} className="flex items-center justify-between rounded-lg border border-line bg-surface p-5"><span className="font-medium">{name}</span><StatusBadge status={tone as "success" | "warning" | "danger"}>{state}</StatusBadge></div>)}</div></AppShell>; }
