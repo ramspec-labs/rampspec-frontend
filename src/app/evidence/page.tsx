@@ -1,0 +1,3 @@
+import { AppShell } from "@/components/app-shell";
+import { EvidenceControls } from "@/components/evidence-controls";
+export default function EvidencePage() { return <AppShell title="Evidence" description="Inspect immutable artifacts attached to backend verification runs."><EvidenceControls /><div className="mt-5 rounded-lg border border-line bg-surface p-5 shadow-panel"><p className="text-sm text-muted">12 artifacts in the current run</p><ul className="mt-4 divide-y divide-line">{["request-001.json", "response-001.json", "checkout-screen.png"].map((item) => <li key={item} className="flex items-center justify-between py-3 text-sm"><code>{item}</code><span className="text-xs text-muted">Sealed · 10:44 UTC</span></li>)}</ul></div></AppShell>; }
