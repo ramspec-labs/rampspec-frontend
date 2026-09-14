@@ -1,0 +1,5 @@
+{
+  "frontend": "0.1.0",
+  "backend": [{ "version": "v1", "status": "supported", "retirement": null }],
+  "reportSchemas": [{ "version": "1", "status": "supported", "retirement": null }]
+}
