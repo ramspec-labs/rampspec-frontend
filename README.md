@@ -10,6 +10,10 @@ The application uses Node.js 20 or newer, pnpm, and strict TypeScript. Install
 dependencies with `pnpm install` and start the development server with
 `pnpm dev`.
 
+Set `NEXT_PUBLIC_API_BASE_URL` to the RampSpec backend origin. The completed
+reviewer workflow is available at `/runs/new/submit`: it sends an idempotent
+SEP-1 reference run and displays only the report returned by the backend.
+
 ## Repository boundaries
 
 - API contracts and generated client inputs are owned by `rampspec-contracts`.
