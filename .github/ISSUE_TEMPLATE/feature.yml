@@ -1,0 +1,33 @@
+name: Frontend change
+description: Propose a focused reviewer workflow or accessibility improvement.
+title: "proposal: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired reviewer outcome
+      description: State the user outcome without prescribing unrelated changes.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: API or documentation source
+      description: Link the released API, report schema, or documentation that defines the behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance checks
+      description: List independently verifiable behavior, accessibility, and responsive checks.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Security, privacy, and compatibility impact
+    validations:
+      required: true
