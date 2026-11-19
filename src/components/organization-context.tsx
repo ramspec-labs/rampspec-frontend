@@ -12,3 +12,4 @@ export function OrganizationProvider({ organizations, children }: { organization
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;
 }
 export function useOrganization() { const value = useContext(OrganizationContext); if (!value) throw new Error("useOrganization must be used within OrganizationProvider"); return value; }
+export function useOptionalOrganization() { return useContext(OrganizationContext); }

@@ -1,0 +1,11 @@
+# Integrated reviewer workflow: #8, #9, #10 and #11
+
+This branch merges the four assigned issue branches. Event-stream connection announcements remain separate from authoritative run results; an unconfigured deployment stream stays disconnected. See `event-stream-status.md` for endpoint configuration and accessibility behavior.
+
+Wizard drafts persist only allowlisted public settings in tab storage, scoped by organization and random draft ID, with a 24-hour expiry. Raw target-origin input and authentication material are not persisted. The parameter warning compares against the restored draft on entry, so previously saved non-default settings do not immediately warn. New, meaningful edits warn before ordinary same-tab navigation and native unload. Stay preserves edits/focus; the scoped tab draft also survives leaving. Review safety is an explicit review action and bypasses a duplicate warning. See `run-wizard-drafts.md` and `unsaved-run-parameters.md`.
+
+Submission validates both restored parameters and the HTTPS origin before a request. The normalized origin is sent with the draft's fixture, timeout and selected resource IDs in the existing reference API's effectiveConfig metadata. The reference API/resource identifiers and backend allowlist remain authoritative. A submission workspace is keyed to the organization/draft; leaving that scope removes its input, retry key and results, and late results are ignored. No backend endpoints or execution semantics are added by this frontend integration.
+
+Combined checks: `npm run test` (69 passing tests), `npm run typecheck`, `npm run lint`, `npm run check:env`, `npm run check:secrets`, `npm run security:malware-scan` and `npm run build` pass. Dependencies were installed using pnpm 10.28.0 with the frozen lockfile. Existing lint script-console warnings and the Next ESLint-plugin notice remain. Integration tests exercise restored-draft warning boundaries, tab persistence, submission validation/metadata and organization changes during a pending request.
+
+Hosted workflow approval and Vercel deployment authorization are controlled by repository/project maintainers. The base trusted scan's fork-checkout restriction is not changed by this issue batch. Local security checks are reported separately from hosted authorization/configuration blockers.

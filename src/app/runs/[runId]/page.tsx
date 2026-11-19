@@ -1,4 +1,16 @@
 import { AppShell } from "@/components/app-shell";
-import { StatusBadge } from "@/components/ui/status-badge";
-const events = [{ type: "queued", message: "Run accepted by queue", at: "10:42:01" }, { type: "started", message: "Target ownership confirmed", at: "10:42:08" }, { type: "check", message: "Checkout smoke: 12 of 18 checks complete", at: "10:43:32" }, { type: "check", message: "Evidence bundle sealed", at: "10:44:10" }];
-export default async function RunPage({ params }: { params: Promise<{ runId: string }> }) { const { runId } = await params; return <AppShell title={`Run ${runId}`} description="Live backend event timeline."><div className="mb-5 flex items-center justify-between rounded-lg border border-line bg-surface p-5 shadow-panel"><div><p className="text-sm text-muted">Current status</p><p className="mt-1 text-lg font-bold">Executing checks</p></div><StatusBadge status="info">Connected</StatusBadge></div><ol className="space-y-3">{events.map((event) => <li key={event.at} className="flex gap-4 rounded-lg border border-line bg-surface p-4"><time className="w-16 shrink-0 text-xs text-muted">{event.at}</time><div><p className="font-medium">{event.message}</p><p className="mt-1 text-xs capitalize text-muted">{event.type}</p></div></li>)}</ol></AppShell>; }
+import { RunEventTimeline } from "@/components/run-event-timeline";
+export default async function RunPage({ params }: { params: Promise<{ runId: string }> }) {
+  const { runId } = await params;
+  // No SSE route is published by the current backend. Deployment configuration
+  // supplies the actual endpoint; missing configuration cannot mean connected.
+  const template = process.env.RAMPSPEC_RUN_EVENT_STREAM_URL;
+  let streamUrl: string | undefined;
+  if (template?.includes("{runId}")) {
+    try {
+      const url = new URL(template.replaceAll("{runId}", encodeURIComponent(runId)));
+      if (url.protocol === "https:" && !url.username && !url.password && !url.hash) streamUrl = url.href;
+    } catch { /* Invalid configuration leaves the transport disconnected. */ }
+  }
+  return <AppShell title={`Run ${runId}`} description="Live backend event timeline."><RunEventTimeline streamUrl={streamUrl} /></AppShell>;
+}

@@ -1,5 +1,14 @@
 import { AlertTriangle, Inbox, LockKeyhole, LoaderCircle } from "lucide-react";
 import type { ReactNode } from "react";
+import type { ConnectionState } from "@/lib/runs/event-stream";
+
+const connectionLabels: Record<ConnectionState, string> = {
+  connecting: "Connecting to live updates", connected: "Connected to live updates",
+  retrying: "Connection interrupted. Retrying live updates", disconnected: "Live updates disconnected",
+};
+export function ConnectionStatus({ state }: { state: ConnectionState }) {
+  return <p role="status" aria-live="polite" aria-atomic="true" className="min-h-12 w-full shrink-0 text-left text-sm sm:w-64 sm:text-right">{connectionLabels[state]}</p>;
+}
 
 type StateProps = { title: string; description: string; action?: ReactNode };
 

@@ -1,13 +1,17 @@
 "use client";
 
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
+import { useWizardDraft, WizardProblem } from "@/components/run-wizard-state";
+import { validateWizardDraft, wizardHref, type WizardDraft } from "@/lib/runs/wizard";
 import { ApiClient, ApiError } from "@/lib/api";
 import {
   submitReferenceRun,
+  validateTargetOrigin,
+  originValidationMessage,
   type ReferenceRunResult,
 } from "@/lib/runs/reference";
 
@@ -19,48 +23,74 @@ const ids = {
 } as const;
 
 export default function SubmitRunPage() {
-  const [idempotencyKey] = useState(() => `reviewer-${crypto.randomUUID()}`);
+  const { draft, error, startNew } = useWizardDraft();
+  return draft ? <SubmitDraft key={`${draft.organizationId}:${draft.id}`} draft={draft} /> : <AppShell title="Run the SEP-1 reference check"><WizardProblem error={error} onStartNew={startNew} /></AppShell>;
+}
+
+function SubmitDraft({ draft }: { draft: WizardDraft }) {
+  const draftErrors = validateWizardDraft(draft, "submit");
+  const [idempotencyKey, setIdempotencyKey] = useState(() => `reviewer-${crypto.randomUUID()}`);
   const [targetOrigin, setTargetOrigin] = useState("");
   const [result, setResult] = useState<ReferenceRunResult>();
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
+  const [serverOriginError, setServerOriginError] = useState<string>();
+  const [touched, setTouched] = useState(false);
+  const busy = useRef(false);
+  const lifetime = useRef<AbortController | null>(null);
+  const originField = useRef<HTMLInputElement>(null);
+  useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
+  const validation = validateTargetOrigin(targetOrigin);
+  const originError = serverOriginError ?? (touched ? validation.error : undefined);
+  useEffect(() => { if (serverOriginError && !submitting) originField.current?.focus(); }, [serverOriginError, submitting]);
   const client = useMemo(
     () =>
       new ApiClient({
         baseUrl:
           process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000",
-        getOrganizationId: () => ids.organization,
+        getOrganizationId: () => draft?.organizationId,
       }),
-    [],
+    [draft?.organizationId],
   );
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!draft || validateWizardDraft(draft, "submit").length) return;
+    if (busy.current) return;
+    setTouched(true);
+    if (validation.error) { originField.current?.focus(); return; }
+    busy.current = true;
+    const signal = lifetime.current!.signal;
     setSubmitting(true);
     setError(undefined);
+    setServerOriginError(undefined);
     setResult(undefined);
     try {
-      setResult(
-        await submitReferenceRun(
+      const next = await submitReferenceRun(
           client,
           {
             projectId: ids.project,
             suiteId: ids.suite,
             suiteVersion: "1.0.0",
             targetId: ids.target,
-            targetOrigin,
+            targetOrigin: validation.origin!,
+            effectiveConfig: { fixture: draft.fixture, timeoutSeconds: Number(draft.timeout), selectedTargetId: draft.targetId, selectedSuiteId: draft.suiteId },
           },
           idempotencyKey,
-        ),
-      );
+        );
+      if (!signal.aborted) setResult(next);
     } catch (caught) {
-      setError(
+      if (signal.aborted) return;
+      const fieldError = originValidationMessage(caught);
+      setServerOriginError(fieldError);
+      if (!fieldError) setError(
         caught instanceof ApiError
           ? caught.message
           : "The API could not complete the reference run.",
       );
     } finally {
-      setSubmitting(false);
+      busy.current = false;
+      if (!signal.aborted) setSubmitting(false);
     }
   }
 
@@ -72,8 +102,11 @@ export default function SubmitRunPage() {
       <div className="grid max-w-4xl gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <form
           onSubmit={submit}
+          noValidate
           className="rounded-lg border border-line bg-surface p-6 shadow-panel"
         >
+          <div className="mb-5 text-sm"><p>Draft fixture: {draft.fixture}</p><p>Draft timeout: {draft.timeout} seconds</p><a className="underline" href={wizardHref("/runs/new/parameters", draft)}>Back to parameters</a></div>
+          {draftErrors.length > 0 && <p role="alert">{draftErrors.join(" ")}</p>}
           <label
             className="block text-sm font-semibold"
             htmlFor="target-origin"
@@ -82,16 +115,25 @@ export default function SubmitRunPage() {
           </label>
           <input
             id="target-origin"
+            ref={originField}
             type="url"
             required
             value={targetOrigin}
             placeholder="https://approved-anchor.example"
-            onChange={(event) => setTargetOrigin(event.target.value)}
+            disabled={submitting}
+            aria-invalid={Boolean(originError)}
+            aria-describedby="target-origin-help target-origin-error"
+            onBlur={() => setTouched(true)}
+            onChange={(event) => {
+              if (validateTargetOrigin(event.target.value).origin !== validation.origin) setIdempotencyKey(`reviewer-${crypto.randomUUID()}`);
+              setTargetOrigin(event.target.value); setTouched(true); setServerOriginError(undefined); setError(undefined); setResult(undefined);
+            }}
             className="mt-2 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-cyan-100"
           />
-          <p className="mt-2 text-xs text-muted">
+          <p id="target-origin-help" className="mt-2 text-xs text-muted">
             The API accepts only HTTPS origins on its deployment allowlist.
           </p>
+          <p id="target-origin-error" aria-live="polite" className="mt-2 text-sm text-red-800">{originError}</p>
 
           <div className="mt-6 rounded-md border border-line bg-canvas p-4">
             <p className="text-xs font-semibold uppercase text-muted">
@@ -112,7 +154,7 @@ export default function SubmitRunPage() {
             </div>
           )}
 
-          <Button className="mt-6" type="submit" disabled={submitting}>
+          <Button className="mt-6" type="submit" disabled={submitting || draftErrors.length > 0}>
             {submitting ? (
               <>
                 <Loader2 className="animate-spin" size={16} /> Running check
