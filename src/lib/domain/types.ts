@@ -2,3 +2,4 @@ export type Project = { id: string; name: string; slug: string; environment: "sa
 export type Target = { id: string; projectId: string; name: string; url: string; kind: "web" | "api"; ownership: "verified" | "pending" | "failed"; status: "active" | "paused" };
 export type Suite = { id: string; name: string; description: string; risk: "low" | "medium" | "high"; testCount: number };
 export type Finding = { id: string; title: string; severity: "critical" | "high" | "medium" | "low"; status: "open" | "accepted" | "resolved"; evidenceCount: number };
+export type Report = { id: string; title: string; outcome: "ready" | "attention" | "blocked"; checks: number; findings: number; coverage: number; generated: string; runId: string; signed: boolean };
