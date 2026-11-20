@@ -23,4 +23,27 @@ describe("ApiClient", () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ type: "https://example.test/problem", title: "Denied", status: 403 }), { status: 403 }));
     await expect(new ApiClient({ baseUrl: "https://api.example.test", fetcher }).get("/v1/projects")).rejects.toBeInstanceOf(ApiError);
   });
+  it("captures idempotency replay headers in postWithMetadata", async () => {
+    const responseHeaders = new Headers({
+      "Idempotency-Replay-Key": "key-1-replay",
+    });
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "run_1", state: "completed" }), { status: 200, headers: responseHeaders }));
+    const client = new ApiClient({
+      baseUrl: "https://api.example.test",
+      fetcher,
+    });
+    const response = await client.postWithMetadata("/v1/runs", { suiteId: "suite" }, "key-1");
+    expect(response.headers.idempotencyReplayKey).toBe("key-1-replay");
+    expect(response.data).toEqual({ id: "run_1", state: "completed" });
+  });
+  it("handles missing idempotency replay headers", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ id: "run_1", state: "completed" }), { status: 201 }));
+    const client = new ApiClient({
+      baseUrl: "https://api.example.test",
+      fetcher,
+    });
+    const response = await client.postWithMetadata("/v1/runs", { suiteId: "suite" }, "key-1");
+    expect(response.headers.idempotencyReplayKey).toBeUndefined();
+    expect(response.data).toEqual({ id: "run_1", state: "completed" });
+  });
 });

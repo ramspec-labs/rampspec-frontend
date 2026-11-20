@@ -1,4 +1,4 @@
-import type { ApiClient } from "@/lib/api";
+import type { ApiClient, ApiResponse } from "@/lib/api";
 
 export type ReferenceRunInput = {
   projectId: string;
@@ -32,6 +32,11 @@ export type ReferenceRunResult = {
   targetOrigin: string;
 };
 
+export type SubmitReferenceRunResult = {
+  result: ReferenceRunResult;
+  isDuplicate: boolean;
+};
+
 export function submitReferenceRun(
   client: Pick<ApiClient, "post">,
   input: ReferenceRunInput,
@@ -42,4 +47,21 @@ export function submitReferenceRun(
     input,
     idempotencyKey,
   );
+}
+
+export async function submitReferenceRunWithMetadata(
+  client: Pick<ApiClient, "postWithMetadata">,
+  input: ReferenceRunInput,
+  idempotencyKey: string,
+): Promise<SubmitReferenceRunResult> {
+  const response = await client.postWithMetadata<ReferenceRunResult>(
+    "/v1/reference-runs",
+    input,
+    idempotencyKey,
+  );
+  const isDuplicate = response.headers.idempotencyReplayKey !== undefined;
+  return {
+    result: response.data,
+    isDuplicate,
+  };
 }

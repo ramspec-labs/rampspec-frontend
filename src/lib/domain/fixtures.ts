@@ -1,5 +1,12 @@
 import type { Finding, Project, Suite, Target } from "./types";
+import type { ReportVersionMetadata } from "@/lib/reports/types";
+
 export const projects: Project[] = [{ id: "prj-1", name: "Acme Checkout", slug: "acme-checkout", environment: "production", targetCount: 3, lastRun: "18 minutes ago", readiness: "ready" }, { id: "prj-2", name: "Acme Wallet", slug: "acme-wallet", environment: "sandbox", targetCount: 2, lastRun: "Yesterday", readiness: "attention" }];
 export const targets: Target[] = [{ id: "tgt-1", projectId: "prj-1", name: "Checkout web", url: "https://checkout.acme.test", kind: "web", ownership: "verified", status: "active" }, { id: "tgt-2", projectId: "prj-1", name: "Checkout API", url: "https://api.acme.test", kind: "api", ownership: "pending", status: "active" }, { id: "tgt-3", projectId: "prj-2", name: "Wallet sandbox", url: "https://wallet.acme.test", kind: "web", ownership: "failed", status: "paused" }];
 export const suites: Suite[] = [{ id: "suite-smoke", name: "Checkout smoke", description: "Critical purchase and refund paths", risk: "medium", testCount: 18 }, { id: "suite-identity", name: "Identity handoff", description: "Authentication and account recovery controls", risk: "high", testCount: 12 }, { id: "suite-wallet", name: "Wallet recovery", description: "Balance, withdrawal, and recovery paths", risk: "high", testCount: 21 }];
 export const findings: Finding[] = [{ id: "f-101", title: "Refund webhook retries are not bounded", severity: "high", status: "open", evidenceCount: 4 }, { id: "f-102", title: "Ownership header missing on API target", severity: "medium", status: "open", evidenceCount: 2 }, { id: "f-103", title: "Recovery email copy approved", severity: "low", status: "resolved", evidenceCount: 1 }];
+
+export const reportVersionMetadata: Record<string, ReportVersionMetadata> = {
+  "report-current": { suiteVersion: "2026.09", schemaVersion: "ramp-3", createdAt: "2026-11-20T10:00:00Z" },
+  "report-stale": { suiteVersion: "2026.08", schemaVersion: "ramp-2", createdAt: "2026-11-10T10:00:00Z" },
+};

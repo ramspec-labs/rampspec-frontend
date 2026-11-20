@@ -1,13 +1,14 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, Info, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useMemo, useState, type FormEvent } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { ApiClient, ApiError } from "@/lib/api";
 import {
-  submitReferenceRun,
+  submitReferenceRunWithMetadata,
   type ReferenceRunResult,
 } from "@/lib/runs/reference";
 
@@ -22,6 +23,7 @@ export default function SubmitRunPage() {
   const [idempotencyKey] = useState(() => `reviewer-${crypto.randomUUID()}`);
   const [targetOrigin, setTargetOrigin] = useState("");
   const [result, setResult] = useState<ReferenceRunResult>();
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const client = useMemo(
@@ -39,9 +41,10 @@ export default function SubmitRunPage() {
     setSubmitting(true);
     setError(undefined);
     setResult(undefined);
+    setIsDuplicate(false);
     try {
-      setResult(
-        await submitReferenceRun(
+      const { result: runResult, isDuplicate: isReplay } = 
+        await submitReferenceRunWithMetadata(
           client,
           {
             projectId: ids.project,
@@ -51,8 +54,9 @@ export default function SubmitRunPage() {
             targetOrigin,
           },
           idempotencyKey,
-        ),
-      );
+        );
+      setResult(runResult);
+      setIsDuplicate(isReplay);
     } catch (caught) {
       setError(
         caught instanceof ApiError
@@ -109,6 +113,21 @@ export default function SubmitRunPage() {
             >
               <AlertCircle className="mt-0.5 shrink-0" size={17} />
               <span>{error}</span>
+            </div>
+          )}
+
+          {isDuplicate && result && (
+            <div
+              role="alert"
+              className="mt-5 flex gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800"
+            >
+              <Info className="mt-0.5 shrink-0" size={17} />
+              <div>
+                <p className="font-semibold">Duplicate request detected</p>
+                <p className="mt-1">
+                  Your request matches a previous submission. Displaying the existing run result.
+                </p>
+              </div>
             </div>
           )}
 
@@ -177,6 +196,18 @@ export default function SubmitRunPage() {
                   {result.run.id}
                 </code>
               </div>
+              {result.run.state === "completed" &&
+                result.report?.reportId && (
+                  <div className="mt-4 border-t border-line pt-4">
+                    <Link
+                      href={`/reports/${encodeURIComponent(result.report.reportId)}`}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
+                    >
+                      View report
+                      <ExternalLink size={14} />
+                    </Link>
+                  </div>
+                )}
             </div>
           )}
         </aside>
