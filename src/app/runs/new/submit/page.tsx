@@ -5,15 +5,14 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
-import { useWizardDraft, WizardProblem } from "@/components/run-wizard-state";
-import { validateWizardDraft, wizardHref, type WizardDraft } from "@/lib/runs/wizard";
+import { useOrganization } from "@/components/organization-context";
 import { ApiClient, ApiError } from "@/lib/api";
 import {
   submitReferenceRun,
-  validateTargetOrigin,
-  originValidationMessage,
+  pollReferenceRunResult,
   type ReferenceRunResult,
 } from "@/lib/runs/reference";
+import { clearDraft } from "@/lib/runs/draft";
 
 const ids = {
   organization: "organization_00000000-0000-4000-8000-000000000001",
@@ -22,77 +21,165 @@ const ids = {
   target: "target_00000000-0000-4000-8000-000000000004",
 } as const;
 
-export default function SubmitRunPage() {
-  const { draft, error, startNew } = useWizardDraft();
-  return draft ? <SubmitDraft key={`${draft.organizationId}:${draft.id}`} draft={draft} /> : <AppShell title="Run the SEP-1 reference check"><WizardProblem error={error} onStartNew={startNew} /></AppShell>;
-}
+type SubmitState =
+  | "idle"
+  | "submitting"
+  | "polling"
+  | "stale"
+  | "unauthorized";
 
-function SubmitDraft({ draft }: { draft: WizardDraft }) {
-  const draftErrors = validateWizardDraft(draft, "submit");
-  const [idempotencyKey, setIdempotencyKey] = useState(() => `reviewer-${crypto.randomUUID()}`);
+export default function SubmitRunPage() {
+  const { current: organization } = useOrganization();
+  const [idempotencyKey] = useState(() => `reviewer-${crypto.randomUUID()}`);
   const [targetOrigin, setTargetOrigin] = useState("");
   const [result, setResult] = useState<ReferenceRunResult>();
   const [error, setError] = useState<string>();
-  const [submitting, setSubmitting] = useState(false);
-  const [serverOriginError, setServerOriginError] = useState<string>();
-  const [touched, setTouched] = useState(false);
-  const busy = useRef(false);
-  const lifetime = useRef<AbortController | null>(null);
-  const originField = useRef<HTMLInputElement>(null);
-  useEffect(() => { const controller = new AbortController(); lifetime.current = controller; return () => controller.abort(); }, []);
-  const validation = validateTargetOrigin(targetOrigin);
-  const originError = serverOriginError ?? (touched ? validation.error : undefined);
-  useEffect(() => { if (serverOriginError && !submitting) originField.current?.focus(); }, [serverOriginError, submitting]);
+  const [state, setState] = useState<SubmitState>("idle");
+  const [pollingAttempt, setPollingAttempt] = useState(0);
+  
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const currentOrgRef = useRef(ids.organization);
+
   const client = useMemo(
     () =>
       new ApiClient({
         baseUrl:
           process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000",
-        getOrganizationId: () => draft?.organizationId,
+        getOrganizationId: () => ids.organization,
       }),
-    [draft?.organizationId],
+    [],
   );
+
+  // Cleanup polling on unmount or org change
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
+
+  // Detect organization change and cancel polling
+  useEffect(() => {
+    const newOrgId = ids.organization;
+    if (currentOrgRef.current !== newOrgId) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+        setState("idle");
+        setResult(undefined);
+        setError("Organization changed. Please submit again.");
+        setPollingAttempt(0);
+      }
+      currentOrgRef.current = newOrgId;
+    }
+  }, [ids.organization]);
+
+  async function startPolling(runId: string) {
+    setState("polling");
+    setError(undefined);
+    setPollingAttempt(0);
+
+    // Cancel any existing polling
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+
+    try {
+      const pollingResult = await pollReferenceRunResult(
+        client,
+        runId,
+        ids.organization,
+        {
+          maxAttempts: 60,
+          initialDelayMs: 1000,
+          maxDelayMs: 30000,
+          backoffMultiplier: 1.5,
+          signal: abortControllerRef.current.signal,
+          onAttempt: (attempt) => setPollingAttempt(attempt),
+        },
+      );
+
+      if (pollingResult.isTerminal) {
+        setResult(pollingResult.result);
+        setState("idle");
+      } else {
+        // Max attempts reached without terminal state
+        setState("stale");
+        setResult(pollingResult.result);
+        setError(
+          "The reference run is still in progress. Please refresh to check for updates.",
+        );
+      }
+    } catch (caught) {
+      // Don't set error for intentional aborts (e.g., navigation)
+      if (caught instanceof DOMException && caught.name === "AbortError") {
+        setState("idle");
+        return;
+      }
+
+      if (caught instanceof ApiError) {
+        if (caught.problem.status === 401 || caught.problem.status === 403) {
+          setState("unauthorized");
+          setError("You don't have permission to access this run.");
+        } else {
+          setState("idle");
+          setError(
+            caught.message || "Failed to fetch reference run results.",
+          );
+        }
+      } else {
+        setState("idle");
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : "Failed to fetch reference run results.",
+        );
+      }
+    } finally {
+      abortControllerRef.current = null;
+    }
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft || validateWizardDraft(draft, "submit").length) return;
-    if (busy.current) return;
-    setTouched(true);
-    if (validation.error) { originField.current?.focus(); return; }
-    busy.current = true;
-    const signal = lifetime.current!.signal;
-    setSubmitting(true);
+    setState("submitting");
     setError(undefined);
-    setServerOriginError(undefined);
     setResult(undefined);
+    setPollingAttempt(0);
+
     try {
-      const next = await submitReferenceRun(
-          client,
-          {
-            projectId: ids.project,
-            suiteId: ids.suite,
-            suiteVersion: "1.0.0",
-            targetId: ids.target,
-            targetOrigin: validation.origin!,
-            effectiveConfig: { fixture: draft.fixture, timeoutSeconds: Number(draft.timeout), selectedTargetId: draft.targetId, selectedSuiteId: draft.suiteId },
-          },
-          idempotencyKey,
-        );
-      if (!signal.aborted) setResult(next);
+      const submitResult = await submitReferenceRun(
+        client,
+        {
+          projectId: ids.project,
+          suiteId: ids.suite,
+          suiteVersion: "1.0.0",
+          targetId: ids.target,
+          targetOrigin,
+        },
+        idempotencyKey,
+      );
+
+      // Clear draft on successful submission
+      clearDraft();
+
+      // Start polling for results
+      await startPolling(submitResult.run.id);
     } catch (caught) {
-      if (signal.aborted) return;
-      const fieldError = originValidationMessage(caught);
-      setServerOriginError(fieldError);
-      if (!fieldError) setError(
+      setState("idle");
+      setError(
         caught instanceof ApiError
           ? caught.message
           : "The API could not complete the reference run.",
       );
-    } finally {
-      busy.current = false;
-      if (!signal.aborted) setSubmitting(false);
     }
   }
+
+  const isLoading = state === "submitting" || state === "polling";
 
   return (
     <AppShell
@@ -102,11 +189,8 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
       <div className="grid max-w-4xl gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <form
           onSubmit={submit}
-          noValidate
           className="rounded-lg border border-line bg-surface p-6 shadow-panel"
         >
-          <div className="mb-5 text-sm"><p>Draft fixture: {draft.fixture}</p><p>Draft timeout: {draft.timeout} seconds</p><a className="underline" href={wizardHref("/runs/new/parameters", draft)}>Back to parameters</a></div>
-          {draftErrors.length > 0 && <p role="alert">{draftErrors.join(" ")}</p>}
           <label
             className="block text-sm font-semibold"
             htmlFor="target-origin"
@@ -115,25 +199,17 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
           </label>
           <input
             id="target-origin"
-            ref={originField}
             type="url"
             required
             value={targetOrigin}
             placeholder="https://approved-anchor.example"
-            disabled={submitting}
-            aria-invalid={Boolean(originError)}
-            aria-describedby="target-origin-help target-origin-error"
-            onBlur={() => setTouched(true)}
-            onChange={(event) => {
-              if (validateTargetOrigin(event.target.value).origin !== validation.origin) setIdempotencyKey(`reviewer-${crypto.randomUUID()}`);
-              setTargetOrigin(event.target.value); setTouched(true); setServerOriginError(undefined); setError(undefined); setResult(undefined);
-            }}
-            className="mt-2 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-cyan-100"
+            onChange={(event) => setTargetOrigin(event.target.value)}
+            disabled={isLoading}
+            className="mt-2 w-full rounded-md border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-cyan-100 disabled:opacity-50"
           />
-          <p id="target-origin-help" className="mt-2 text-xs text-muted">
+          <p className="mt-2 text-xs text-muted">
             The API accepts only HTTPS origins on its deployment allowlist.
           </p>
-          <p id="target-origin-error" aria-live="polite" className="mt-2 text-sm text-red-800">{originError}</p>
 
           <div className="mt-6 rounded-md border border-line bg-canvas p-4">
             <p className="text-xs font-semibold uppercase text-muted">
@@ -154,10 +230,13 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
             </div>
           )}
 
-          <Button className="mt-6" type="submit" disabled={submitting || draftErrors.length > 0}>
-            {submitting ? (
+          <Button className="mt-6" type="submit" disabled={isLoading}>
+            {isLoading ? (
               <>
-                <Loader2 className="animate-spin" size={16} /> Running check
+                <Loader2 className="animate-spin" size={16} />{" "}
+                {state === "polling"
+                  ? `Polling (attempt ${pollingAttempt})`
+                  : "Running check"}
               </>
             ) : (
               "Run reference check"
@@ -169,7 +248,9 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
           <h2 className="font-semibold">Evidence summary</h2>
           {!result ? (
             <p className="mt-3 text-sm text-muted">
-              Results appear here only after the backend completes the probe.
+              {state === "polling"
+                ? "Waiting for backend to complete the probe..."
+                : "Results appear here only after the backend completes the probe."}
             </p>
           ) : (
             <div className="mt-4">

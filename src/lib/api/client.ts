@@ -1,4 +1,4 @@
-import { ApiError, type Page } from "./types";
+import { ApiError, type Page, type ApiResponse, type ResponseHeaders } from "./types";
 
 export type ApiClientOptions = {
   baseUrl: string;
@@ -47,7 +47,27 @@ export class ApiClient {
     });
   }
 
+  async postWithMetadata<T>(
+    path: string,
+    body: unknown,
+    idempotencyKey: string,
+  ): Promise<ApiResponse<T>> {
+    return this.requestWithMetadata<T>(new URL(path, this.options.baseUrl).toString(), {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json",
+        "Idempotency-Key": idempotencyKey,
+      },
+      method: "POST",
+    });
+  }
+
   private async request<T>(url: string, init: RequestInit): Promise<T> {
+    const response = await this.requestWithMetadata<T>(url, init);
+    return response.data;
+  }
+
+  private async requestWithMetadata<T>(url: string, init: RequestInit): Promise<ApiResponse<T>> {
     const token = this.options.getToken?.();
     const organizationId = this.options.getOrganizationId?.();
     const response = await this.fetcher(url, {
@@ -74,6 +94,11 @@ export class ApiClient {
       }
       throw new ApiError(problem);
     }
-    return response.json() as Promise<T>;
+    const data = await response.json() as T;
+    const headers: ResponseHeaders = {
+      status: response.status,
+      idempotencyReplayKey: response.headers.get("Idempotency-Replay-Key") ?? undefined,
+    };
+    return { data, headers };
   }
 }

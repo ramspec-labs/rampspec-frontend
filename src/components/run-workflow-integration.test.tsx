@@ -7,7 +7,13 @@ import { OrganizationProvider, useOrganization } from "./organization-context";
 import { createWizardDraft, draftKey, wizardHref } from "@/lib/runs/wizard";
 
 const post = vi.hoisted(() => vi.fn());
-vi.mock("@/lib/api", async original => ({ ...await original<object>(), ApiClient: class { post = post; } }));
+vi.mock("@/lib/api", async original => ({
+  ...await original<object>(),
+  ApiClient: class {
+    postWithMetadata = (...args: unknown[]) =>
+      post(...args).then((data: unknown) => ({ data, headers: { status: 201 } }));
+  },
+}));
 const organizations = [{ id:"org-1",name:"Synthetic one",slug:"one",role:"operator" as const },{ id:"org-2",name:"Synthetic two",slug:"two",role:"viewer" as const }];
 function Shell({children}:{children:React.ReactNode}) { return <OrganizationProvider organizations={organizations}>{children}</OrganizationProvider>; }
 function Switch() { const {select}=useOrganization();return <button onClick={()=>select("org-2")}>Switch organization</button>; }
