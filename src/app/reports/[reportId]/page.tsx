@@ -1,9 +1,11 @@
+"use client";
+
 import { AppShell } from "@/components/app-shell";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { findings, reportVersionMetadata } from "@/lib/domain/fixtures";
 import { ReportCoverage } from "@/components/report-coverage";
 import { ReportBaseline } from "@/components/report-baseline";
-import { ReportExports } from "@/components/report-exports";
+import { ReportExports, type IntegrityState } from "@/components/report-exports";
 import { ReportFindingsView } from "@/components/report-findings-view";
 import { StaleReportIndicator } from "@/components/stale-report-indicator";
 import { checkVersionCompatibility } from "@/lib/reports/compatibility";
@@ -18,6 +20,7 @@ export default async function ReportDetailPage({
   // Get report version metadata - default to current if not found
   const metadata = reportVersionMetadata[reportId] || reportVersionMetadata["report-current"];
   const compatibility = checkVersionCompatibility(metadata);
+  const integrityState: IntegrityState = "verified";
 
   return (
     <AppShell
@@ -55,6 +58,12 @@ export default async function ReportDetailPage({
       </div>
       <div className="mt-6">
         <ReportBaseline />
+      </div>
+      <div className="mt-6 rounded-lg border border-line bg-surface p-6 shadow-panel">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Export report</h2>
+          <ReportExports reportId={reportId} integrityState={integrityState} />
+        </div>
       </div>
       <div className="mt-6">
         <ReportFindingsView reportId={reportId} findings={findings} />
