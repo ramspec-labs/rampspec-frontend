@@ -58,6 +58,11 @@ export type ReferenceRunResult = {
   targetOrigin: string;
 };
 
+export type SubmitReferenceRunResult = {
+  result: ReferenceRunResult;
+  isDuplicate: boolean;
+};
+
 export function submitReferenceRun(
   client: Pick<ApiClient, "post">,
   input: ReferenceRunInput,
@@ -70,4 +75,23 @@ export function submitReferenceRun(
     { ...input, targetOrigin: validated.origin },
     idempotencyKey,
   );
+}
+
+export async function submitReferenceRunWithMetadata(
+  client: Pick<ApiClient, "postWithMetadata">,
+  input: ReferenceRunInput,
+  idempotencyKey: string,
+): Promise<SubmitReferenceRunResult> {
+  const validated = validateTargetOrigin(input.targetOrigin);
+  if (validated.error) return Promise.reject(new Error(validated.error));
+  const response = await client.postWithMetadata<ReferenceRunResult>(
+    "/v1/reference-runs",
+    { ...input, targetOrigin: validated.origin },
+    idempotencyKey,
+  );
+  const isDuplicate = response.headers.idempotencyReplayKey !== undefined;
+  return {
+    result: response.data,
+    isDuplicate,
+  };
 }

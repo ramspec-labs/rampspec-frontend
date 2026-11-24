@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ExternalLink, Info, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 
 import { AppShell } from "@/components/app-shell";
@@ -9,7 +10,7 @@ import { useWizardDraft, WizardProblem } from "@/components/run-wizard-state";
 import { validateWizardDraft, wizardHref, type WizardDraft } from "@/lib/runs/wizard";
 import { ApiClient, ApiError } from "@/lib/api";
 import {
-  submitReferenceRun,
+  submitReferenceRunWithMetadata,
   validateTargetOrigin,
   originValidationMessage,
   type ReferenceRunResult,
@@ -32,6 +33,7 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
   const [idempotencyKey, setIdempotencyKey] = useState(() => `reviewer-${crypto.randomUUID()}`);
   const [targetOrigin, setTargetOrigin] = useState("");
   const [result, setResult] = useState<ReferenceRunResult>();
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const [serverOriginError, setServerOriginError] = useState<string>();
@@ -65,8 +67,10 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
     setError(undefined);
     setServerOriginError(undefined);
     setResult(undefined);
+    setIsDuplicate(false);
     try {
-      const next = await submitReferenceRun(
+      const { result: runResult, isDuplicate: isReplay } =
+        await submitReferenceRunWithMetadata(
           client,
           {
             projectId: ids.project,
@@ -78,7 +82,10 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
           },
           idempotencyKey,
         );
-      if (!signal.aborted) setResult(next);
+      if (!signal.aborted) {
+        setResult(runResult);
+        setIsDuplicate(isReplay);
+      }
     } catch (caught) {
       if (signal.aborted) return;
       const fieldError = originValidationMessage(caught);
@@ -154,6 +161,21 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
             </div>
           )}
 
+          {isDuplicate && result && (
+            <div
+              role="alert"
+              className="mt-5 flex gap-3 rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800"
+            >
+              <Info className="mt-0.5 shrink-0" size={17} />
+              <div>
+                <p className="font-semibold">Duplicate request detected</p>
+                <p className="mt-1">
+                  Your request matches a previous submission. Displaying the existing run result.
+                </p>
+              </div>
+            </div>
+          )}
+
           <Button className="mt-6" type="submit" disabled={submitting || draftErrors.length > 0}>
             {submitting ? (
               <>
@@ -219,6 +241,18 @@ function SubmitDraft({ draft }: { draft: WizardDraft }) {
                   {result.run.id}
                 </code>
               </div>
+              {result.run.state === "completed" &&
+                result.report?.reportId && (
+                  <div className="mt-4 border-t border-line pt-4">
+                    <Link
+                      href={`/reports/${encodeURIComponent(result.report.reportId)}`}
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-accent hover:underline"
+                    >
+                      View report
+                      <ExternalLink size={14} />
+                    </Link>
+                  </div>
+                )}
             </div>
           )}
         </aside>
